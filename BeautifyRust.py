@@ -51,8 +51,8 @@ class BeautifyRustCommand(sublime_plugin.TextCommand):
         beautifier = subprocess.Popen(
             cmd, cwd=cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             startupinfo=startupinfo)
-        (_, err) = beautifier.communicate()
-        return (beautifier.wait(), err.decode('utf8'))
+        (out, err) = beautifier.communicate()
+        return (beautifier.wait(), out.decode('utf8'), err.decode('utf8'))
 
     def run_format(self, edit):
         buffer_region = sublime.Region(0, self.view.size())
@@ -63,15 +63,18 @@ class BeautifyRustCommand(sublime_plugin.TextCommand):
         if rustfmt_bin is None:
             return sublime.error_message(
                 "Beautify rust: can not find {0} in path.".format(self.settings.get("rustfmt", "rustfmt")))
-        cmd_list = [rustfmt_bin, self.filename, "--write-mode=overwrite"] + self.settings.get("args", [])
+        cmd_list = [rustfmt_bin, self.filename, "--write-mode=display"] + self.settings.get("args", [])
         self.save_viewport_state()
-        (exit_code, err) = self.pipe(cmd_list)
+        (exit_code, out, err) = self.pipe(cmd_list)
         if exit_code != 0 or (err != "" and not err.startswith("Using rustfmt")):
             self.view.replace(edit, buffer_region, buffer_text)
             print("failed: exit_code: {0}\n{1}".format(exit_code, err))
             if sublime.load_settings(SETTINGS_FILE).get("show_errors", True):
                 sublime.error_message(
                     "Beautify rust: rustfmt process call failed. See log (ctrl + `) for details.")
+        else:
+            # Need to find a safe way to trim the unrelated header lines of the output and replace the contents of the view with it
+            print("out:\n%s" % out)
         self.view.window().run_command("reload_all_files")
         self.reset_viewport_state()
 
